@@ -88,3 +88,12 @@ lint/tmp/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Debug/temp files
+build_output.txt
+install_output.txt
+live_logcat.txt
+logcat*.txt
+nul
+onvif_camera_db
+*.bat
