@@ -184,8 +184,8 @@ fun CameraGridScreen(
             AuthDialog(
                 cameraName = camera.device.name,
                 onDismiss = { viewModel.dismissAuthDialog() },
-                onConnect = { username, password ->
-                    viewModel.connectCamera(camera.id, username, password)
+                onConnect = { username, password, rtspUsername ->
+                    viewModel.connectCamera(camera.id, username, password, rtspUsername)
                 }
             )
         }

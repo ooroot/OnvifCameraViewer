@@ -1,5 +1,6 @@
 package com.example.onvifcameraviewer.ui.components
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +46,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.example.onvifcameraviewer.data.onvif.OnvifMediaService
 import com.example.onvifcameraviewer.data.player.RtspPlayerManager
 import com.example.onvifcameraviewer.domain.model.CameraUiState
 import com.example.onvifcameraviewer.domain.model.ConnectionState
@@ -68,56 +69,53 @@ fun CameraCell(
 ) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
-    var isPlaying by remember { mutableStateOf(false) }
-    
-    // Lifecycle-aware player management
-    DisposableEffect(camera.streamUri, lifecycle) {
+    var isResumed by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+
+    // Track lifecycle resumed state via a stable observer (keyed on camera.id — never restarts)
+    DisposableEffect(camera.id) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> {
-                    if (camera.connectionState == ConnectionState.STREAMING && 
-                        camera.streamUri != null) {
-                        try {
-                            player = playerManager.createGridPlayer(camera.streamUri)
-                            player?.prepare()
-                            isPlaying = true
-                        } catch (t: Throwable) {
-                            // Failed to create player, log and ignore to prevent crash
-                            t.printStackTrace()
-                            player = null
-                            isPlaying = false
-                        }
-                    }
-                }
-                Lifecycle.Event.ON_PAUSE -> {
-                    playerManager.releasePlayer(player)
-                    player = null
-                    isPlaying = false
-                }
+                Lifecycle.Event.ON_RESUME -> { isResumed = true }
+                Lifecycle.Event.ON_PAUSE -> { isResumed = false }
                 else -> {}
             }
         }
         lifecycle.addObserver(observer)
-        
-        // Initial player creation if already streaming
-        if (camera.connectionState == ConnectionState.STREAMING && 
-            camera.streamUri != null &&
-            lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-            try {
-                player = playerManager.createGridPlayer(camera.streamUri)
-                player?.prepare()
-                isPlaying = true
-            } catch (t: Throwable) {
-                // Failed to create player, log and ignore to prevent crash
-                t.printStackTrace()
-                player = null
-                isPlaying = false
-            }
-        }
-        
         onDispose {
             lifecycle.removeObserver(observer)
-            playerManager.releasePlayer(player)
+        }
+    }
+
+    // Single player creation/release effect.
+    // Keys: camera.id (identity), isResumed (lifecycle), connectionState + streamUri (readiness).
+    // Only camera.id is stable — the others cause restart when they change, which is exactly
+    // what we want: create player when all conditions met, release when any condition lost.
+    DisposableEffect(camera.id, isResumed, camera.connectionState, camera.streamUri) {
+        var activePlayer: ExoPlayer? = null
+
+        if (isResumed && camera.connectionState == ConnectionState.STREAMING && camera.streamUri != null) {
+            try {
+                val streamUri = camera.streamUri
+                val creds = camera.credentials
+                val playUri = if (creds != null) {
+                    OnvifMediaService.embedCredentialsInUri(streamUri, creds)
+                } else {
+                    streamUri
+                }
+                activePlayer = playerManager.createGridPlayer(playUri)
+                player = activePlayer
+            } catch (t: Throwable) {
+                Log.e("CameraCell", "Player creation failed for ${camera.id}", t)
+                activePlayer = null
+                player = null
+            }
+        }
+
+        onDispose {
+            if (activePlayer != null) {
+                playerManager.releasePlayer(activePlayer)
+                player = null
+            }
         }
     }
     
