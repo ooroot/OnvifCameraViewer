@@ -54,6 +54,7 @@ class CameraRepository @Inject constructor(
             ipAddress = device.ipAddress,
             username = credentials?.username,
             password = credentials?.password,
+            rtspUsername = credentials?.rtspUsername,
             isManual = isManual
         )
         cameraDao.insertCamera(entity)
@@ -101,53 +102,61 @@ class CameraRepository @Inject constructor(
     
     /**
      * Gets the sub-stream URI (lower quality, for grid view).
+     * Accepts pre-fetched profiles to avoid a redundant SOAP round-trip.
      */
     suspend fun getSubStreamUri(
         device: OnvifDevice,
-        credentials: Credentials
+        credentials: Credentials,
+        profiles: List<MediaProfile>? = null
     ): Result<String> {
-        val profilesResult = getProfiles(device, credentials)
-        if (profilesResult.isFailure) {
-            return Result.failure(
-                profilesResult.exceptionOrNull() 
-                    ?: OnvifException.NetworkException("Unknown error getting profiles")
-            )
+        val resolvedProfiles = profiles ?: run {
+            val profilesResult = getProfiles(device, credentials)
+            if (profilesResult.isFailure) {
+                return Result.failure(
+                    profilesResult.exceptionOrNull()
+                        ?: OnvifException.NetworkException("Unknown error getting profiles")
+                )
+            }
+            profilesResult.getOrNull() ?: emptyList()
         }
-        
-        val profiles = profilesResult.getOrNull() ?: emptyList()
-        if (profiles.isEmpty()) {
+
+        if (resolvedProfiles.isEmpty()) {
             return Result.failure(Exception("No profiles available"))
         }
         
-        val subStreamProfile = profiles.find { profile ->
+        val subStreamProfile = resolvedProfiles.find { profile ->
             val config = profile.videoEncoderConfig
             config != null && config.width <= 720 && config.height <= 576
-        } ?: profiles.last()
+        } ?: resolvedProfiles.last()
         
         return getStreamUri(device, credentials, subStreamProfile.token)
     }
     
     /**
      * Gets the main-stream URI (highest quality, for fullscreen view).
+     * Accepts pre-fetched profiles to avoid a redundant SOAP round-trip.
      */
     suspend fun getMainStreamUri(
         device: OnvifDevice,
-        credentials: Credentials
+        credentials: Credentials,
+        profiles: List<MediaProfile>? = null
     ): Result<String> {
-        val profilesResult = getProfiles(device, credentials)
-        if (profilesResult.isFailure) {
-            return Result.failure(
-                profilesResult.exceptionOrNull() 
-                    ?: OnvifException.NetworkException("Unknown error getting profiles")
-            )
+        val resolvedProfiles = profiles ?: run {
+            val profilesResult = getProfiles(device, credentials)
+            if (profilesResult.isFailure) {
+                return Result.failure(
+                    profilesResult.exceptionOrNull()
+                        ?: OnvifException.NetworkException("Unknown error getting profiles")
+                )
+            }
+            profilesResult.getOrNull() ?: emptyList()
         }
-        
-        val profiles = profilesResult.getOrNull() ?: emptyList()
-        if (profiles.isEmpty()) {
+
+        if (resolvedProfiles.isEmpty()) {
             return Result.failure(Exception("No profiles available"))
         }
         
-        return getStreamUri(device, credentials, profiles.first().token)
+        return getStreamUri(device, credentials, resolvedProfiles.first().token)
     }
     
     private fun CameraEntity.toSavedCamera() = SavedCamera(
@@ -162,7 +171,7 @@ class CameraRepository @Inject constructor(
             serviceUrl = serviceUrl,
             ipAddress = ipAddress
         ),
-        credentials = if (username != null) Credentials(username, password ?: "") else null,
+        credentials = if (username != null) Credentials(username, password ?: "", rtspUsername = rtspUsername) else null,
         isManual = isManual
     )
 }

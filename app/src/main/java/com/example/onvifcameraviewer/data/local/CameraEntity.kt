@@ -19,5 +19,6 @@ data class CameraEntity(
     val ipAddress: String,
     val username: String?,
     val password: String?,
+    val rtspUsername: String? = null,
     val isManual: Boolean = false
 )
