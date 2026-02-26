@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Config for ONVIF Camera Viewer.
+    ONVIF IP cameras on local networks typically use self-signed TLS certificates
+    or plain HTTP. This config permits both for private IP ranges only.
+-->
+<network-security-config>
+    <!-- Trust user-installed CAs in addition to system CAs (for debug/enterprise certs) -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Private network ranges used by local IP cameras -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- 192.168.x.x -->
+        <domain includeSubdomains="false">192.168.0.0</domain>
+        <!-- 10.x.x.x -->
+        <domain includeSubdomains="false">10.0.0.0</domain>
+        <!-- 172.16-31.x.x -->
+        <domain includeSubdomains="false">172.16.0.0</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
