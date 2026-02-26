@@ -5,5 +5,8 @@ package com.example.onvifcameraviewer.domain.model
  */
 data class Credentials(
     val username: String,
-    val password: String
-)
+    val password: String,
+    val rtspUsername: String? = null
+) {
+    val effectiveRtspUsername: String get() = rtspUsername?.takeIf { it.isNotBlank() } ?: username
+}
