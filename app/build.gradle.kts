@@ -82,7 +82,7 @@ dependencies {
     // Networking
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    implementation("io.github.rburgst:okhttp-digest:3.1.0")
+    // okhttp-digest removed — manual HTTP Digest auth in OnvifMediaService avoids nonce poisoning
     
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
